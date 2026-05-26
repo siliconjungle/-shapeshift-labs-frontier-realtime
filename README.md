@@ -1,20 +1,213 @@
 # Frontier Realtime
 
-Reserved placeholder for `@shapeshift-labs/frontier-realtime`.
+Realtime multiplayer command, tick, snapshot, prediction, and reconciliation primitives for Frontier.
 
-This repository is intentionally a placeholder. It reserves the package and source
-repository name for a future Frontier realtime multiplayer runtime. It does not
-contain production APIs, implementation code, benchmark claims, or release-ready
-package contents yet.
+This package is the dependency-free shared realtime layer. It defines the small contracts that client, authoritative server, and transport packages can agree on without pulling a server runtime, WebSocket adapter, CRDT sync, rendering engine, or physics engine into the root import.
 
-Planned scope:
+- npm: [`@shapeshift-labs/frontier-realtime`](https://www.npmjs.com/package/@shapeshift-labs/frontier-realtime)
+- source: [`siliconjungle/-shapeshift-labs-frontier-realtime`](https://github.com/siliconjungle/-shapeshift-labs-frontier-realtime)
+- license: MIT
 
-- realtime command, tick, and snapshot contracts
-- client prediction and authoritative reconciliation primitives
-- interpolation and rollback buffer contracts
-- shared replication message types for server and transport packages
+## Related Packages
 
-This package is intended to sit above the core Frontier state, codec, schema,
-event-log, and query layers. It should stay separate from CRDT collaboration
-sync, which remains owned by `@shapeshift-labs/frontier-crdt-sync`.
+- [`@shapeshift-labs/frontier`](https://www.npmjs.com/package/@shapeshift-labs/frontier): core JSON diff/apply primitives for state snapshots and patches.
+- [`@shapeshift-labs/frontier-query`](https://www.npmjs.com/package/@shapeshift-labs/frontier-query): shared selector and entity identity vocabulary that can feed interest management.
+- [`@shapeshift-labs/frontier-codec`](https://www.npmjs.com/package/@shapeshift-labs/frontier-codec): patch serialization and byte helpers for higher realtime transports.
+- [`@shapeshift-labs/frontier-state`](https://www.npmjs.com/package/@shapeshift-labs/frontier-state): patch-routed client/server state projections.
+- [`@shapeshift-labs/frontier-event-log`](https://www.npmjs.com/package/@shapeshift-labs/frontier-event-log): bounded command, snapshot, and replay windows.
+- [`@shapeshift-labs/frontier-schema`](https://www.npmjs.com/package/@shapeshift-labs/frontier-schema): validation for command and state contracts.
+- [`@shapeshift-labs/frontier-logging`](https://www.npmjs.com/package/@shapeshift-labs/frontier-logging): tick, latency, and reconciliation diagnostics.
 
+Planned companion repositories:
+
+- [`@shapeshift-labs/frontier-realtime-server`](https://github.com/siliconjungle/-shapeshift-labs-frontier-realtime-server): planned authoritative server runtime for rooms, ticks, validation, lag-compensation history, and replication policy.
+- [`@shapeshift-labs/frontier-realtime-websocket`](https://github.com/siliconjungle/-shapeshift-labs-frontier-realtime-websocket): planned WebSocket transport for realtime commands and snapshots.
+- [`@shapeshift-labs/frontier-game`](https://github.com/siliconjungle/-shapeshift-labs-frontier-game): planned game-facing entity, component, player, room, ownership, and replication vocabulary above realtime.
+
+## Install
+
+```sh
+npm install @shapeshift-labs/frontier-realtime
+```
+
+## Usage
+
+```ts
+import {
+  createCommandSource,
+  createPredictionState,
+  createSnapshotBuffer,
+  createTickClock,
+  interpolateSnapshot
+} from '@shapeshift-labs/frontier-realtime';
+
+const commands = createCommandSource({ clientId: 'player-a' });
+const clock = createTickClock({ tickRate: 20 });
+
+const client = createPredictionState({
+  clientId: 'player-a',
+  snapshot: {
+    tick: 0,
+    state: { x: 0 },
+    lastCommandSeqByClient: { 'player-a': 0 }
+  },
+  applyCommand(state, command) {
+    return { x: state.x + command.payload.dx };
+  }
+});
+
+client.predict(commands.create('move', { dx: 1 }, { tick: clock.step().tick }));
+client.acceptSnapshot({
+  tick: 1,
+  state: { x: 10 },
+  lastCommandSeqByClient: { 'player-a': 1 }
+});
+
+const snapshots = createSnapshotBuffer<{ x: number }>({ capacity: 32 });
+snapshots.push({ tick: 1, timeMs: 100, state: { x: 10 } });
+snapshots.push({ tick: 2, timeMs: 150, state: { x: 20 } });
+
+const sample = snapshots.sample(125);
+const rendered = sample
+  ? interpolateSnapshot(sample, (previous, next, alpha) => ({
+      x: previous.x + (next.x - previous.x) * alpha
+    }))
+  : null;
+```
+
+## API
+
+```ts
+import {
+  createCommandSource,
+  createPredictionState,
+  createSnapshotBuffer,
+  createTickClock,
+  decodeRealtimeMessage,
+  encodeRealtimeMessage,
+  reconcileSnapshot,
+  type RealtimeCommand,
+  type RealtimeSnapshot
+} from '@shapeshift-labs/frontier-realtime';
+```
+
+### Commands
+
+`createCommandSource(options)` creates monotonic client command envelopes with `clientId`, `seq`, `type`, `payload`, optional room/actor/tick metadata, and a stable default command id.
+
+```ts
+const source = createCommandSource({ clientId: 'client-a' });
+const command = source.create('move', { dx: 1, dy: 0 }, { roomId: 'room-1' });
+```
+
+### Prediction and Reconciliation
+
+`createPredictionState(options)` keeps a predicted client state by applying local commands immediately, accepting authoritative snapshots, dropping acknowledged commands, and replaying remaining pending commands over the latest server state.
+
+```ts
+const prediction = createPredictionState({
+  clientId: 'client-a',
+  snapshot: { tick: 0, state: { score: 0 } },
+  applyCommand: (state, command) => ({
+    score: state.score + command.payload.points
+  })
+});
+
+prediction.predict(source.create('score', { points: 5 }));
+prediction.acceptSnapshot({
+  tick: 2,
+  state: { score: 10 },
+  lastCommandSeqByClient: { 'client-a': 1 }
+});
+```
+
+`reconcileSnapshot(snapshot, pending, applyCommand, options)` exposes the same operation as a pure helper for custom client stores.
+
+### Snapshot Buffers
+
+`createSnapshotBuffer(options)` stores ordered authoritative snapshots and samples a render time between them. The package returns interpolation metadata but does not assume a physics or rendering model.
+
+```ts
+const sample = buffer.sample(renderTimeMs);
+const state = sample && interpolateSnapshot(sample, lerpState);
+```
+
+### Tick Clocks
+
+`createTickClock(options)` maps wall-clock time to fixed simulation ticks and tracks how many ticks should be advanced.
+
+```ts
+const clock = createTickClock({ tickRate: 60 });
+const { steps } = clock.update(performance.now());
+```
+
+### Messages
+
+The message helpers encode and guard small JSON envelopes shared by future transports:
+
+- client: `join`, `command`, `leave`, `pong`
+- server: `welcome`, `snapshot`, `delta`, `command-ack`, `command-reject`, `ping`
+
+Transport-specific framing, reconnect behavior, and server room loops belong in higher packages.
+
+## Subpath Imports
+
+```ts
+import { createCommandSource } from '@shapeshift-labs/frontier-realtime/command';
+import { createPredictionState } from '@shapeshift-labs/frontier-realtime/prediction';
+import { createSnapshotBuffer } from '@shapeshift-labs/frontier-realtime/snapshot-buffer';
+import { createTickClock } from '@shapeshift-labs/frontier-realtime/tick';
+import { encodeRealtimeMessage } from '@shapeshift-labs/frontier-realtime/messages';
+```
+
+## Package Scope
+
+This package intentionally owns only shared realtime primitives:
+
+- Command envelopes and monotonic client command ids.
+- Fixed tick math.
+- Authoritative snapshot acknowledgement and pending-command replay.
+- Client-side prediction state.
+- Snapshot buffers for interpolation.
+- Small JSON message envelope guards.
+
+It does not own authoritative server loops, sockets, persistence, CRDT sync, physics, renderer bindings, anti-cheat policy, entity/component gameplay APIs, or durable world editing. Those belong in higher packages or application code.
+
+## TypeScript
+
+The package ships ESM JavaScript plus `.d.ts` declarations for the root export and public subpaths. It has no runtime dependencies.
+
+## Validation
+
+```sh
+npm test
+npm run fuzz
+npm run bench
+npm run pack:dry
+```
+
+The package test suite covers root and subpath imports, command creation, prediction and reconciliation, rejected commands, snapshot interpolation, tick math, message envelopes, TypeScript declarations, randomized pending-command replay, and package export boundaries.
+
+## Benchmarks
+
+Run the package-local benchmark:
+
+```sh
+npm run bench
+```
+
+Latest local package benchmark on Node v26.1.0, darwin arm64, 9 rounds:
+
+| Fixture | Median | p95 |
+| --- | ---: | ---: |
+| Create 32 client commands | 2.55 us | 2.69 us |
+| Reconcile 128 pending commands | 5.33 us | 5.72 us |
+| Prediction accept snapshot | 21.68 us | 25.79 us |
+| Snapshot buffer push/sample | 2.31 us | 2.78 us |
+| Tick clock update, 128 frames | 1.93 us | 2.26 us |
+
+These are Frontier-only package measurements, not competitor comparisons.
+
+## License
+
+MIT. See [LICENSE](./LICENSE).

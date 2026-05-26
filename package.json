@@ -1,11 +1,103 @@
 {
   "name": "@shapeshift-labs/frontier-realtime",
-  "version": "0.0.0",
-  "private": true,
-  "description": "Reserved placeholder for Frontier realtime multiplayer runtime primitives.",
+  "version": "0.1.0",
+  "description": "Realtime multiplayer command, tick, snapshot, prediction, and reconciliation primitives for Frontier.",
+  "type": "module",
+  "sideEffects": false,
   "repository": {
     "type": "git",
     "url": "git+ssh://git@github.com/siliconjungle/-shapeshift-labs-frontier-realtime.git"
   },
-  "license": "MIT"
+  "homepage": "https://github.com/siliconjungle/-shapeshift-labs-frontier-realtime#readme",
+  "bugs": {
+    "url": "https://github.com/siliconjungle/-shapeshift-labs-frontier-realtime/issues"
+  },
+  "license": "MIT",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "default": "./dist/index.js"
+    },
+    "./command": {
+      "types": "./dist/command.d.ts",
+      "import": "./dist/command.js",
+      "default": "./dist/command.js"
+    },
+    "./messages": {
+      "types": "./dist/messages.d.ts",
+      "import": "./dist/messages.js",
+      "default": "./dist/messages.js"
+    },
+    "./prediction": {
+      "types": "./dist/prediction.d.ts",
+      "import": "./dist/prediction.js",
+      "default": "./dist/prediction.js"
+    },
+    "./snapshot-buffer": {
+      "types": "./dist/snapshot-buffer.d.ts",
+      "import": "./dist/snapshot-buffer.js",
+      "default": "./dist/snapshot-buffer.js"
+    },
+    "./tick": {
+      "types": "./dist/tick.d.ts",
+      "import": "./dist/tick.js",
+      "default": "./dist/tick.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "typesVersions": {
+    "*": {
+      "command": [
+        "./dist/command.d.ts"
+      ],
+      "messages": [
+        "./dist/messages.d.ts"
+      ],
+      "prediction": [
+        "./dist/prediction.d.ts"
+      ],
+      "snapshot-buffer": [
+        "./dist/snapshot-buffer.d.ts"
+      ],
+      "tick": [
+        "./dist/tick.d.ts"
+      ],
+      "*": [
+        "./dist/index.d.ts"
+      ]
+    }
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE",
+    "benchmarks/package-bench.mjs"
+  ],
+  "engines": {
+    "node": ">=18"
+  },
+  "scripts": {
+    "build": "node build.mjs",
+    "test": "npm run build && npm run typecheck && node test/smoke.mjs && node test/fuzz.mjs --cases 300 && node test/package-boundaries.mjs",
+    "prepack": "npm run test",
+    "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p test/tsconfig.json --noEmit",
+    "fuzz": "npm run build && node test/fuzz.mjs",
+    "bench": "npm run build && node benchmarks/package-bench.mjs",
+    "pack:dry": "npm pack --dry-run"
+  },
+  "keywords": [
+    "frontier",
+    "realtime",
+    "multiplayer",
+    "prediction",
+    "reconciliation",
+    "snapshot",
+    "tick"
+  ],
+  "devDependencies": {
+    "typescript": "^6.0.3"
+  }
 }

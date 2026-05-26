@@ -1,0 +1,127 @@
+import assert from 'node:assert';
+import {
+  clampTickDelta,
+  createCommandSource,
+  createPredictionState,
+  createSnapshotBuffer,
+  createTickClock,
+  decodeRealtimeMessage,
+  encodeRealtimeMessage,
+  getSnapshotAckSeq,
+  interpolateSnapshot,
+  isRealtimeClientMessage,
+  isRealtimeServerMessage,
+  reconcileSnapshot,
+  sampleSnapshots,
+  tickToTimeMs,
+  timeToTick
+} from '../dist/index.js';
+import { createCommandSource as createCommandSourceSubpath } from '../dist/command.js';
+import { createPredictionState as createPredictionStateSubpath } from '../dist/prediction.js';
+import { createSnapshotBuffer as createSnapshotBufferSubpath } from '../dist/snapshot-buffer.js';
+import { createTickClock as createTickClockSubpath } from '../dist/tick.js';
+import { encodeRealtimeMessage as encodeRealtimeMessageSubpath } from '../dist/messages.js';
+
+assert.strictEqual(createCommandSourceSubpath, createCommandSource);
+assert.strictEqual(createPredictionStateSubpath, createPredictionState);
+assert.strictEqual(createSnapshotBufferSubpath, createSnapshotBuffer);
+assert.strictEqual(createTickClockSubpath, createTickClock);
+assert.strictEqual(encodeRealtimeMessageSubpath, encodeRealtimeMessage);
+
+{
+  let now = 1000;
+  const source = createCommandSource({ clientId: 'client-a', now: () => now += 16 });
+  const first = source.create('move', { dx: 1 }, { roomId: 'room-1', tick: 10 });
+  const second = source.create('move', { dx: 2 });
+
+  assert.strictEqual(first.clientId, 'client-a');
+  assert.strictEqual(first.seq, 1);
+  assert.strictEqual(first.id, 'client-a:1:move');
+  assert.strictEqual(first.timeMs, 1016);
+  assert.strictEqual(second.seq, 2);
+
+  source.reset(9);
+  assert.strictEqual(source.nextSeq, 9);
+}
+
+{
+  const apply = (state, command) => ({ x: state.x + command.payload.dx });
+  const source = createCommandSource({ clientId: 'client-a', now: () => 1 });
+  const prediction = createPredictionState({
+    clientId: 'client-a',
+    snapshot: { tick: 0, state: { x: 0 }, lastCommandSeqByClient: { 'client-a': 0 } },
+    applyCommand: apply
+  });
+
+  const first = source.create('move', { dx: 1 });
+  const second = source.create('move', { dx: 2 });
+
+  assert.deepStrictEqual(prediction.predict(first), { x: 1 });
+  assert.deepStrictEqual(prediction.predict(second), { x: 3 });
+  assert.strictEqual(prediction.pending.length, 2);
+
+  const accepted = prediction.acceptSnapshot({
+    tick: 1,
+    state: { x: 10 },
+    lastCommandSeqByClient: { 'client-a': 1 }
+  });
+
+  assert.strictEqual(accepted.acknowledged, 1);
+  assert.strictEqual(accepted.replayed, 1);
+  assert.deepStrictEqual(prediction.state, { x: 12 });
+  assert.deepStrictEqual(prediction.pending.map((command) => command.seq), [2]);
+
+  const rejected = prediction.reject({ clientId: 'client-a', seq: 2, reason: 'invalid' });
+  assert.strictEqual(rejected.replayed, 0);
+  assert.deepStrictEqual(prediction.state, { x: 10 });
+  assert.deepStrictEqual(prediction.pending, []);
+
+  assert.strictEqual(getSnapshotAckSeq({ tick: 1, state: {}, ack: [{ clientId: 'client-a', seq: 5 }] }, 'client-a'), 5);
+  assert.deepStrictEqual(
+    reconcileSnapshot({ tick: 2, state: { x: 1 }, lastCommandSeqByClient: { 'client-a': 0 } }, [first], apply).state,
+    { x: 2 }
+  );
+}
+
+{
+  const buffer = createSnapshotBuffer({ capacity: 3 });
+  buffer.push({ tick: 1, timeMs: 100, state: { x: 0 } });
+  buffer.push({ tick: 3, timeMs: 300, state: { x: 20 } });
+  buffer.push({ tick: 2, timeMs: 200, state: { x: 10 } });
+
+  assert.deepStrictEqual(buffer.snapshots.map((snapshot) => snapshot.tick), [1, 2, 3]);
+
+  const sample = buffer.sample(150);
+  assert.ok(sample);
+  assert.strictEqual(sample.alpha, 0.5);
+  assert.deepStrictEqual(
+    interpolateSnapshot(sample, (previous, next, alpha) => ({ x: previous.x + (next.x - previous.x) * alpha })),
+    { x: 5 }
+  );
+
+  buffer.push({ tick: 4, timeMs: 400, state: { x: 40 } });
+  assert.deepStrictEqual(buffer.snapshots.map((snapshot) => snapshot.tick), [2, 3, 4]);
+  assert.strictEqual(sampleSnapshots(buffer.snapshots, 999)?.previous.tick, 4);
+}
+
+{
+  const clock = createTickClock({ tickRate: 20, startTimeMs: 100 });
+  assert.strictEqual(clock.tickMs, 50);
+  assert.strictEqual(clock.toTick(225), 2);
+  assert.strictEqual(clock.update(225).steps, 2);
+  assert.strictEqual(clock.step(3).tick, 5);
+  assert.strictEqual(timeToTick(260, 50, 100), 3);
+  assert.strictEqual(tickToTimeMs(3, 50, 100), 250);
+  assert.strictEqual(clampTickDelta(3, 10, 4), 4);
+}
+
+{
+  const join = { version: 1, type: 'join', roomId: 'room-1', clientId: 'client-a' };
+  const encoded = encodeRealtimeMessage(join);
+  const decoded = decodeRealtimeMessage(encoded);
+  assert.strictEqual(isRealtimeClientMessage(decoded), true);
+  assert.strictEqual(isRealtimeServerMessage({ version: 1, type: 'snapshot', snapshot: { tick: 1, state: {} } }), true);
+  assert.throws(() => encodeRealtimeMessage({ version: 1, type: 'unknown' }), /invalid realtime message/);
+}
+
+console.log('frontier realtime smoke passed');
