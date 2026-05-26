@@ -18,11 +18,11 @@ This package is the dependency-free shared realtime layer. It defines the small 
 - [`@shapeshift-labs/frontier-schema`](https://www.npmjs.com/package/@shapeshift-labs/frontier-schema): validation for command and state contracts.
 - [`@shapeshift-labs/frontier-logging`](https://www.npmjs.com/package/@shapeshift-labs/frontier-logging): tick, latency, and reconciliation diagnostics.
 
-Planned companion repositories:
+Companion repositories:
 
-- [`@shapeshift-labs/frontier-realtime-server`](https://github.com/siliconjungle/-shapeshift-labs-frontier-realtime-server): planned authoritative server runtime for rooms, ticks, validation, lag-compensation history, and replication policy.
-- [`@shapeshift-labs/frontier-realtime-websocket`](https://github.com/siliconjungle/-shapeshift-labs-frontier-realtime-websocket): planned WebSocket transport for realtime commands and snapshots.
-- [`@shapeshift-labs/frontier-game`](https://github.com/siliconjungle/-shapeshift-labs-frontier-game): planned game-facing entity, component, player, room, ownership, and replication vocabulary above realtime.
+- [`@shapeshift-labs/frontier-realtime-server`](https://github.com/siliconjungle/-shapeshift-labs-frontier-realtime-server): authoritative server runtime for rooms, ticks, validation, session resume, snapshot history, and replication policy.
+- [`@shapeshift-labs/frontier-realtime-websocket`](https://github.com/siliconjungle/-shapeshift-labs-frontier-realtime-websocket): WebSocket transport for realtime commands, snapshots, deltas, and resume joins.
+- [`@shapeshift-labs/frontier-game`](https://github.com/siliconjungle/-shapeshift-labs-frontier-game): game-facing entity, component, player, room, ownership, spatial interest, and replication vocabulary above realtime.
 
 ## Install
 
@@ -83,6 +83,8 @@ import {
   createPredictionState,
   createSnapshotBuffer,
   createTickClock,
+  createRealtimeDelta,
+  encodeRealtimeBinaryMessage,
   decodeRealtimeMessage,
   encodeRealtimeMessage,
   reconcileSnapshot,
@@ -150,6 +152,12 @@ The message helpers encode and guard small JSON envelopes shared by future trans
 
 Transport-specific framing, reconnect behavior, and server room loops belong in higher packages.
 
+### Binary and Delta Frames
+
+`encodeRealtimeBinaryMessage()` and `decodeRealtimeBinaryMessage()` provide a compact binary envelope for hot realtime loops. The frame keeps command, snapshot, delta, ack, reject, ping, pong, and resume join metadata in the shared protocol package so transports do not need to invent their own wire shape.
+
+`createRealtimeDelta()` and `applyRealtimeDelta()` are generic snapshot-delta helpers. They do not require Frontier core, but `@shapeshift-labs/frontier-realtime/frontier` adds optional `diff()`/`applyPatchImmutable()` adapters and `@shapeshift-labs/frontier-realtime/codec` adds optional `frontier-codec` patch-frame helpers.
+
 ## Subpath Imports
 
 ```ts
@@ -158,6 +166,10 @@ import { createPredictionState } from '@shapeshift-labs/frontier-realtime/predic
 import { createSnapshotBuffer } from '@shapeshift-labs/frontier-realtime/snapshot-buffer';
 import { createTickClock } from '@shapeshift-labs/frontier-realtime/tick';
 import { encodeRealtimeMessage } from '@shapeshift-labs/frontier-realtime/messages';
+import { encodeRealtimeBinaryMessage } from '@shapeshift-labs/frontier-realtime/binary';
+import { createRealtimeDelta } from '@shapeshift-labs/frontier-realtime/delta';
+import { createFrontierRealtimeDelta } from '@shapeshift-labs/frontier-realtime/frontier';
+import { encodeRealtimeCodecDelta } from '@shapeshift-labs/frontier-realtime/codec';
 ```
 
 ## Package Scope
@@ -170,6 +182,8 @@ This package intentionally owns only shared realtime primitives:
 - Client-side prediction state.
 - Snapshot buffers for interpolation.
 - Small JSON message envelope guards.
+- Compact binary protocol frames.
+- Generic snapshot deltas, with optional Frontier patch and codec adapters behind subpaths.
 
 It does not own authoritative server loops, sockets, persistence, CRDT sync, physics, renderer bindings, anti-cheat policy, entity/component gameplay APIs, or durable world editing. Those belong in higher packages or application code.
 
@@ -200,11 +214,11 @@ Latest local package benchmark on Node v26.1.0, darwin arm64, 9 rounds:
 
 | Fixture | Median | p95 |
 | --- | ---: | ---: |
-| Create 32 client commands | 2.55 us | 2.69 us |
-| Reconcile 128 pending commands | 5.33 us | 5.72 us |
-| Prediction accept snapshot | 21.68 us | 25.79 us |
-| Snapshot buffer push/sample | 2.31 us | 2.78 us |
-| Tick clock update, 128 frames | 1.93 us | 2.26 us |
+| Create 32 client commands | 2.26 us | 2.44 us |
+| Reconcile 128 pending commands | 5.08 us | 5.29 us |
+| Prediction accept snapshot | 21.99 us | 22.46 us |
+| Snapshot buffer push/sample | 2.19 us | 2.95 us |
+| Tick clock update, 128 frames | 1.96 us | 2.26 us |
 
 These are Frontier-only package measurements, not competitor comparisons.
 

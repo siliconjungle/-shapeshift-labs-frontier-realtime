@@ -31,6 +31,26 @@
       "import": "./dist/messages.js",
       "default": "./dist/messages.js"
     },
+    "./binary": {
+      "types": "./dist/binary.d.ts",
+      "import": "./dist/binary.js",
+      "default": "./dist/binary.js"
+    },
+    "./codec": {
+      "types": "./dist/codec.d.ts",
+      "import": "./dist/codec.js",
+      "default": "./dist/codec.js"
+    },
+    "./delta": {
+      "types": "./dist/delta.d.ts",
+      "import": "./dist/delta.js",
+      "default": "./dist/delta.js"
+    },
+    "./frontier": {
+      "types": "./dist/frontier.d.ts",
+      "import": "./dist/frontier.js",
+      "default": "./dist/frontier.js"
+    },
     "./prediction": {
       "types": "./dist/prediction.d.ts",
       "import": "./dist/prediction.js",
@@ -56,6 +76,18 @@
       "messages": [
         "./dist/messages.d.ts"
       ],
+      "binary": [
+        "./dist/binary.d.ts"
+      ],
+      "codec": [
+        "./dist/codec.d.ts"
+      ],
+      "delta": [
+        "./dist/delta.d.ts"
+      ],
+      "frontier": [
+        "./dist/frontier.d.ts"
+      ],
       "prediction": [
         "./dist/prediction.d.ts"
       ],
@@ -78,6 +110,18 @@
   ],
   "engines": {
     "node": ">=18"
+  },
+  "peerDependencies": {
+    "@shapeshift-labs/frontier": ">=0.1.8",
+    "@shapeshift-labs/frontier-codec": ">=0.1.4"
+  },
+  "peerDependenciesMeta": {
+    "@shapeshift-labs/frontier": {
+      "optional": true
+    },
+    "@shapeshift-labs/frontier-codec": {
+      "optional": true
+    }
   },
   "scripts": {
     "build": "node build.mjs",

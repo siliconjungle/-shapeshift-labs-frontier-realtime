@@ -1,12 +1,17 @@
 import {
   createCommandSource,
   createPredictionState,
+  createRealtimeDelta,
   createSnapshotBuffer,
   createTickClock,
+  encodeRealtimeBinaryMessage,
   type RealtimeCommand,
+  type RealtimeDelta,
   type RealtimeSnapshot
 } from '../dist/index.js';
+import { encodeRealtimeBinaryMessage as encodeRealtimeBinaryMessageSubpath } from '../dist/binary.js';
 import { createCommandSource as createCommandSourceSubpath } from '../dist/command.js';
+import { createRealtimeDelta as createRealtimeDeltaSubpath } from '../dist/delta.js';
 import { createPredictionState as createPredictionStateSubpath } from '../dist/prediction.js';
 import { createSnapshotBuffer as createSnapshotBufferSubpath } from '../dist/snapshot-buffer.js';
 import { createTickClock as createTickClockSubpath } from '../dist/tick.js';
@@ -50,3 +55,12 @@ const clock = createTickClock({ tickRate: 20 });
 const clock2 = createTickClockSubpath({ tickMs: 50 });
 clock.step();
 clock2.step();
+
+const delta: RealtimeDelta<{ dx: number }> = createRealtimeDelta(snapshot, { tick: 1, state: { x: 1 } }, {
+  createPatch: (left, right) => ({ dx: right.x - left.x })
+});
+createRealtimeDeltaSubpath(snapshot, { tick: 2, state: { x: 2 } }, {
+  createPatch: (left, right) => ({ dx: right.x - left.x })
+});
+encodeRealtimeBinaryMessage({ version: 1, type: 'delta', delta });
+encodeRealtimeBinaryMessageSubpath({ version: 1, type: 'snapshot', snapshot });

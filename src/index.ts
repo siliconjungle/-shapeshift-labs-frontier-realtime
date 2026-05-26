@@ -30,6 +30,17 @@ export {
   isRealtimeServerMessage,
   validateRealtimeMessageEnvelope
 } from './messages.js';
+export {
+  applyRealtimeDelta,
+  createRealtimeDelta,
+  estimateJsonMessageBytes,
+  shouldSendRealtimeDelta
+} from './delta.js';
+export {
+  decodeRealtimeBinaryMessage,
+  encodeRealtimeBinaryMessage,
+  isRealtimeBinaryMessage
+} from './binary.js';
 
 export type {
   ApplyRealtimeCommand,
@@ -63,6 +74,12 @@ export type {
   RealtimeCommandSource,
   RealtimeCommandSourceOptions
 } from './command.js';
+export type {
+  ApplyRealtimeDeltaOptions,
+  CreateRealtimeDeltaOptions,
+  RealtimePatchApplier,
+  RealtimePatchCreator
+} from './delta.js';
 export type {
   RealtimePredictionState,
   RealtimePredictionStateOptions,

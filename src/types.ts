@@ -57,6 +57,9 @@ export interface RealtimeClientJoinMessage {
   readonly roomId: RealtimeRoomId;
   readonly clientId: RealtimeClientId;
   readonly token?: string;
+  readonly sessionId?: string;
+  readonly resumeToken?: string;
+  readonly lastSeenTick?: RealtimeTick;
 }
 
 export interface RealtimeClientCommandMessage<TCommand extends RealtimeCommand = RealtimeCommand> {
@@ -91,6 +94,10 @@ export interface RealtimeServerWelcomeMessage<TState = unknown> {
   readonly clientId: RealtimeClientId;
   readonly roomId: RealtimeRoomId;
   readonly snapshot?: RealtimeSnapshot<TState>;
+  readonly sessionId?: string;
+  readonly resumeToken?: string;
+  readonly resumed?: boolean;
+  readonly lastSeenTick?: RealtimeTick;
 }
 
 export interface RealtimeServerSnapshotMessage<TState = unknown> {

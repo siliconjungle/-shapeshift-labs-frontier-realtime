@@ -1,14 +1,20 @@
 import assert from 'node:assert';
 import {
   clampTickDelta,
+  applyRealtimeDelta,
   createCommandSource,
+  createRealtimeDelta,
   createPredictionState,
   createSnapshotBuffer,
   createTickClock,
+  decodeRealtimeBinaryMessage,
   decodeRealtimeMessage,
+  encodeRealtimeBinaryMessage,
   encodeRealtimeMessage,
+  estimateJsonMessageBytes,
   getSnapshotAckSeq,
   interpolateSnapshot,
+  isRealtimeBinaryMessage,
   isRealtimeClientMessage,
   isRealtimeServerMessage,
   reconcileSnapshot,
@@ -21,12 +27,18 @@ import { createPredictionState as createPredictionStateSubpath } from '../dist/p
 import { createSnapshotBuffer as createSnapshotBufferSubpath } from '../dist/snapshot-buffer.js';
 import { createTickClock as createTickClockSubpath } from '../dist/tick.js';
 import { encodeRealtimeMessage as encodeRealtimeMessageSubpath } from '../dist/messages.js';
+import { createRealtimeDelta as createRealtimeDeltaSubpath } from '../dist/delta.js';
+import { encodeRealtimeBinaryMessage as encodeRealtimeBinaryMessageSubpath } from '../dist/binary.js';
+import { createFrontierRealtimeDelta, applyFrontierRealtimeDelta } from '../dist/frontier.js';
+import { encodeRealtimeCodecDelta, decodeRealtimeCodecDelta } from '../dist/codec.js';
 
 assert.strictEqual(createCommandSourceSubpath, createCommandSource);
 assert.strictEqual(createPredictionStateSubpath, createPredictionState);
 assert.strictEqual(createSnapshotBufferSubpath, createSnapshotBuffer);
 assert.strictEqual(createTickClockSubpath, createTickClock);
 assert.strictEqual(encodeRealtimeMessageSubpath, encodeRealtimeMessage);
+assert.strictEqual(createRealtimeDeltaSubpath, createRealtimeDelta);
+assert.strictEqual(encodeRealtimeBinaryMessageSubpath, encodeRealtimeBinaryMessage);
 
 {
   let now = 1000;
@@ -122,6 +134,43 @@ assert.strictEqual(encodeRealtimeMessageSubpath, encodeRealtimeMessage);
   assert.strictEqual(isRealtimeClientMessage(decoded), true);
   assert.strictEqual(isRealtimeServerMessage({ version: 1, type: 'snapshot', snapshot: { tick: 1, state: {} } }), true);
   assert.throws(() => encodeRealtimeMessage({ version: 1, type: 'unknown' }), /invalid realtime message/);
+}
+
+{
+  const previous = { tick: 1, state: { x: 1, y: 2 } };
+  const next = { tick: 2, timeMs: 50, state: { x: 2, y: 2 } };
+  const delta = createRealtimeDelta(previous, next, {
+    createPatch: (left, right) => ({ dx: right.x - left.x })
+  });
+  assert.deepStrictEqual(delta, { tick: 2, baseTick: 1, timeMs: 50, patch: { dx: 1 } });
+  assert.deepStrictEqual(
+    applyRealtimeDelta(previous, delta, { applyPatch: (state, patch) => ({ ...state, x: state.x + patch.dx }) }).state,
+    next.state
+  );
+  assert.ok(estimateJsonMessageBytes(delta) > 0);
+}
+
+{
+  const message = {
+    version: 1,
+    type: 'snapshot',
+    roomId: 'room-1',
+    snapshot: { tick: 2, state: { x: 3 }, lastCommandSeqByClient: { 'client-a': 4 } }
+  };
+  const frame = encodeRealtimeBinaryMessage(message);
+  assert.strictEqual(isRealtimeBinaryMessage(frame), true);
+  assert.deepStrictEqual(JSON.parse(JSON.stringify(decodeRealtimeBinaryMessage(frame))), message);
+}
+
+{
+  const previous = { tick: 1, state: { x: 1, nested: { ok: true } } };
+  const next = { tick: 2, state: { x: 2, nested: { ok: true } } };
+  const delta = createFrontierRealtimeDelta(previous, next);
+  const applied = applyFrontierRealtimeDelta(previous, delta);
+  assert.deepStrictEqual(applied.state, next.state);
+  const encoded = encodeRealtimeCodecDelta(delta);
+  assert.strictEqual(typeof encoded.patch, 'string');
+  assert.deepStrictEqual(decodeRealtimeCodecDelta(encoded).patch, delta.patch);
 }
 
 console.log('frontier realtime smoke passed');

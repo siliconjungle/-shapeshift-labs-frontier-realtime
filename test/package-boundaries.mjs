@@ -8,7 +8,11 @@ const pkg = JSON.parse(fs.readFileSync(path.join(rootDir, 'package.json'), 'utf8
 
 const expectedExports = [
   '.',
+  './binary',
+  './codec',
   './command',
+  './delta',
+  './frontier',
   './messages',
   './prediction',
   './snapshot-buffer',
@@ -19,6 +23,11 @@ const expectedExports = [
 assert.deepStrictEqual(Object.keys(pkg.exports).sort(), expectedExports.sort());
 assert.strictEqual(pkg.sideEffects, false);
 assert.strictEqual(pkg.dependencies, undefined);
+assert.deepStrictEqual(Object.keys(pkg.peerDependencies).sort(), ['@shapeshift-labs/frontier', '@shapeshift-labs/frontier-codec']);
+
+const rootJs = fs.readFileSync(path.join(rootDir, 'dist/index.js'), 'utf8');
+assert.strictEqual(rootJs.includes('@shapeshift-labs/frontier'), false);
+assert.strictEqual(rootJs.includes('@shapeshift-labs/frontier-codec'), false);
 
 for (const [key, value] of Object.entries(pkg.exports)) {
   if (key === './package.json') continue;
