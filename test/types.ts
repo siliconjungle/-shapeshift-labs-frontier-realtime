@@ -13,6 +13,11 @@ import { encodeRealtimeBinaryMessage as encodeRealtimeBinaryMessageSubpath } fro
 import { createCommandSource as createCommandSourceSubpath } from '../dist/command.js';
 import { createRealtimeDelta as createRealtimeDeltaSubpath } from '../dist/delta.js';
 import { createPredictionState as createPredictionStateSubpath } from '../dist/prediction.js';
+import {
+  createRollbackInputSource,
+  createRollbackSession,
+  type RollbackInput
+} from '../dist/rollback.js';
 import { createSnapshotBuffer as createSnapshotBufferSubpath } from '../dist/snapshot-buffer.js';
 import { createTickClock as createTickClockSubpath } from '../dist/tick.js';
 
@@ -64,3 +69,16 @@ createRealtimeDeltaSubpath(snapshot, { tick: 2, state: { x: 2 } }, {
 });
 encodeRealtimeBinaryMessage({ version: 1, type: 'delta', delta });
 encodeRealtimeBinaryMessageSubpath({ version: 1, type: 'snapshot', snapshot });
+
+const rollbackInput: RollbackInput<MovePayload> = createRollbackInputSource<MovePayload>({
+  clientId: 'client-a',
+  inputDelay: 1
+}).create({ dx: 1 }, 0);
+const rollback = createRollbackSession<State, MovePayload>({
+  initialState: { x: 0 },
+  players: ['client-a'],
+  predictInput: () => ({ dx: 0 }),
+  stepFrame: (state, inputs) => ({ x: state.x + inputs.inputs[0].payload.dx })
+});
+rollback.addRemoteInput(rollbackInput);
+rollback.advance();

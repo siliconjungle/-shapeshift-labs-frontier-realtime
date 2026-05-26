@@ -56,6 +56,11 @@
       "import": "./dist/prediction.js",
       "default": "./dist/prediction.js"
     },
+    "./rollback": {
+      "types": "./dist/rollback.d.ts",
+      "import": "./dist/rollback.js",
+      "default": "./dist/rollback.js"
+    },
     "./snapshot-buffer": {
       "types": "./dist/snapshot-buffer.d.ts",
       "import": "./dist/snapshot-buffer.js",
@@ -90,6 +95,9 @@
       ],
       "prediction": [
         "./dist/prediction.d.ts"
+      ],
+      "rollback": [
+        "./dist/rollback.d.ts"
       ],
       "snapshot-buffer": [
         "./dist/snapshot-buffer.d.ts"

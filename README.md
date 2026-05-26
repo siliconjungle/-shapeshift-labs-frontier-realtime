@@ -84,6 +84,7 @@ import {
   createSnapshotBuffer,
   createTickClock,
   createRealtimeDelta,
+  createRollbackSession,
   encodeRealtimeBinaryMessage,
   decodeRealtimeMessage,
   encodeRealtimeMessage,
@@ -158,6 +159,25 @@ Transport-specific framing, reconnect behavior, and server room loops belong in 
 
 `createRealtimeDelta()` and `applyRealtimeDelta()` are generic snapshot-delta helpers. They do not require Frontier core, but `@shapeshift-labs/frontier-realtime/frontier` adds optional `diff()`/`applyPatchImmutable()` adapters and `@shapeshift-labs/frontier-realtime/codec` adds optional `frontier-codec` patch-frame helpers.
 
+### Rollback Netcode
+
+`@shapeshift-labs/frontier-realtime/rollback` provides deterministic fixed-frame input logs, input delay, remote input prediction, checkpoints, rollback/replay, predicted/confirmed frame tracking, and replay-safe side-effect emission. The app still owns deterministic simulation and rendering.
+
+```ts
+import { createRollbackSession } from '@shapeshift-labs/frontier-realtime/rollback';
+
+const rollback = createRollbackSession({
+  initialState: { x: 0 },
+  players: ['local', 'remote'],
+  predictInput: (_clientId, _frame, previous) => previous?.payload ?? { dx: 0 },
+  stepFrame(state, frameInputs) {
+    return {
+      x: state.x + frameInputs.inputs.reduce((sum, input) => sum + input.payload.dx, 0)
+    };
+  }
+});
+```
+
 ## Subpath Imports
 
 ```ts
@@ -170,6 +190,7 @@ import { encodeRealtimeBinaryMessage } from '@shapeshift-labs/frontier-realtime/
 import { createRealtimeDelta } from '@shapeshift-labs/frontier-realtime/delta';
 import { createFrontierRealtimeDelta } from '@shapeshift-labs/frontier-realtime/frontier';
 import { encodeRealtimeCodecDelta } from '@shapeshift-labs/frontier-realtime/codec';
+import { createRollbackSession } from '@shapeshift-labs/frontier-realtime/rollback';
 ```
 
 ## Package Scope
@@ -184,6 +205,7 @@ This package intentionally owns only shared realtime primitives:
 - Small JSON message envelope guards.
 - Compact binary protocol frames.
 - Generic snapshot deltas, with optional Frontier patch and codec adapters behind subpaths.
+- Optional rollback input/checkpoint/replay session primitives behind `./rollback`.
 
 It does not own authoritative server loops, sockets, persistence, CRDT sync, physics, renderer bindings, anti-cheat policy, entity/component gameplay APIs, or durable world editing. Those belong in higher packages or application code.
 
@@ -214,11 +236,11 @@ Latest local package benchmark on Node v26.1.0, darwin arm64, 9 rounds:
 
 | Fixture | Median | p95 |
 | --- | ---: | ---: |
-| Create 32 client commands | 2.26 us | 2.44 us |
-| Reconcile 128 pending commands | 5.08 us | 5.29 us |
-| Prediction accept snapshot | 21.99 us | 22.46 us |
-| Snapshot buffer push/sample | 2.19 us | 2.95 us |
-| Tick clock update, 128 frames | 1.96 us | 2.26 us |
+| Create 32 client commands | 2.08 us | 2.23 us |
+| Reconcile 128 pending commands | 4.74 us | 4.97 us |
+| Prediction accept snapshot | 19.51 us | 19.80 us |
+| Snapshot buffer push/sample | 2.01 us | 2.44 us |
+| Tick clock update, 128 frames | 1.58 us | 1.89 us |
 
 These are Frontier-only package measurements, not competitor comparisons.
 

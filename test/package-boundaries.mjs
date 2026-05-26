@@ -15,6 +15,7 @@ const expectedExports = [
   './frontier',
   './messages',
   './prediction',
+  './rollback',
   './snapshot-buffer',
   './tick',
   './package.json'

@@ -24,6 +24,7 @@ import {
 } from '../dist/index.js';
 import { createCommandSource as createCommandSourceSubpath } from '../dist/command.js';
 import { createPredictionState as createPredictionStateSubpath } from '../dist/prediction.js';
+import { createRollbackInputSource, createRollbackSession } from '../dist/rollback.js';
 import { createSnapshotBuffer as createSnapshotBufferSubpath } from '../dist/snapshot-buffer.js';
 import { createTickClock as createTickClockSubpath } from '../dist/tick.js';
 import { encodeRealtimeMessage as encodeRealtimeMessageSubpath } from '../dist/messages.js';
@@ -171,6 +172,38 @@ assert.strictEqual(encodeRealtimeBinaryMessageSubpath, encodeRealtimeBinaryMessa
   const encoded = encodeRealtimeCodecDelta(delta);
   assert.strictEqual(typeof encoded.patch, 'string');
   assert.deepStrictEqual(decodeRealtimeCodecDelta(encoded).patch, delta.patch);
+}
+
+{
+  const session = createRollbackSession({
+    initialState: { x: 0 },
+    players: ['local', 'remote'],
+    initialFrame: 0,
+    inputDelay: 1,
+    checkpointInterval: 1,
+    cloneState: (state) => ({ ...state }),
+    checksum: (state) => state.x,
+    predictInput: (_clientId, _frame, previous) => previous?.payload ?? { dx: 0 },
+    stepFrame(state, frameInputs, context) {
+      const dx = frameInputs.inputs.reduce((sum, input) => sum + input.payload.dx, 0);
+      context.emit({ frame: frameInputs.frame, x: state.x + dx });
+      return { x: state.x + dx };
+    }
+  });
+  const local = createRollbackInputSource({ clientId: 'local', inputDelay: 1 });
+  const remote = createRollbackInputSource({ clientId: 'remote', inputDelay: 0 });
+  session.addRemoteInput(remote.create({ dx: 0 }, 1));
+  session.addRemoteInput(local.create({ dx: 1 }, 0));
+  assert.deepStrictEqual(session.advance()[0].state, { x: 1 });
+  session.addRemoteInput(local.create({ dx: 1 }, 1));
+  assert.deepStrictEqual(session.advance()[0].state, { x: 2 });
+  const correction = session.addRemoteInput({ clientId: 'remote', frame: 2, payload: { dx: 5 }, status: 'confirmed' });
+  assert.strictEqual(correction.corrected, true);
+  assert.strictEqual(correction.replayed, 1);
+  assert.deepStrictEqual(session.state, { x: 7 });
+  assert.deepStrictEqual(session.predictedFrames, []);
+  assert.strictEqual(session.confirmedFrame, 2);
+  assert.strictEqual(session.checksum(), 7);
 }
 
 console.log('frontier realtime smoke passed');
