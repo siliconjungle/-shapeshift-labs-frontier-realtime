@@ -120,8 +120,8 @@
     "node": ">=18"
   },
   "peerDependencies": {
-    "@shapeshift-labs/frontier": ">=0.1.8",
-    "@shapeshift-labs/frontier-codec": ">=0.1.4"
+    "@shapeshift-labs/frontier": "0.1.8",
+    "@shapeshift-labs/frontier-codec": "0.1.4"
   },
   "peerDependenciesMeta": {
     "@shapeshift-labs/frontier": {
