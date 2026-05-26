@@ -1,0 +1,11 @@
+{
+  "name": "@shapeshift-labs/frontier-realtime",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Reserved placeholder for Frontier realtime multiplayer runtime primitives.",
+  "repository": {
+    "type": "git",
+    "url": "git+ssh://git@github.com/siliconjungle/-shapeshift-labs-frontier-realtime.git"
+  },
+  "license": "MIT"
+}
